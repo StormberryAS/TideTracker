@@ -1,0 +1,21 @@
+TideTracker – Coastal Tides & Currents
+
+Core Functionality:
+- Show predicted high/low tide times for any coastal city.
+- Visual “water‑level” animation using CSS gradients.
+- Optional “moon‑influence” overlay linking tide data to lunar phase.
+
+Why it fits:
+- Re‑uses the city database from SunApp/MoonApp.
+- Offline‑first: ship a compressed tide‑table dataset (few MB) that can be queried locally.
+- Keeps the premium dark‑mode glass‑morphism aesthetic.
+
+Potential UI Elements:
+- Glass‑morphism card with tide graph.
+- Animated water‑level bar.
+- Tooltip with moon‑phase influence.
+
+Design & Development Rules:
+- All pages must have footers as similar to SunApp as possible.
+- The favicon in SVG must be in the mainhead.
+- Once ready, I want to see it in localhost before we git push it.
