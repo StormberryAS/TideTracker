@@ -10,7 +10,7 @@
   'use strict';
 
   var APP_ID = 'tidetracker';
-  var VERSION = '1';
+  var VERSION = '2';
   var MANDATORY = false;
 
   /* The version rides in the key so that materially new wording re-prompts
@@ -63,6 +63,7 @@
     '<div class="sb-gate-scroll">',
     '<div class="sb-gate-body" id="' + BODY_ID + '">',
     '<p>This is a functioning prototype, published to show what Stormberry AS builds. It is not a certified instrument, not a professional service, and not a substitute for an authoritative source.</p>',
+    '<p>It is <strong>not a finished product</strong>, it is not maintained as one, and <strong>it will eventually stop working</strong>: data moves, interfaces change, and nothing here is kept in step with them. Its purpose is to show a potential use of AI, making a possibility visible quickly so it can be judged and then built properly if it is worth building.</p>',
     '<p><strong>Not for navigation.</strong> The tide figures are astronomical calculations. They exclude weather, storm surge and local harbour geometry, any of which can shift the real water level substantially.</p>',
     '<p>For anything on or near the water, use official tide tables from <a href="https://www.kartverket.no/til-sjos/se-havniva" target="_blank" rel="noopener noreferrer">Kartverket</a> or your national hydrographic office.</p>',
     '</div>',
