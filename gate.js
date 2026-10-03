@@ -64,14 +64,14 @@
     '<div class="sb-gate-body" id="' + BODY_ID + '">',
     '<p>This is a functioning prototype, published to show what Stormberry AS builds. It is not a certified instrument, not a professional service, and not a substitute for an authoritative source.</p>',
     '<p>It is <strong>not a finished product</strong>, it is not maintained as one, and <strong>it will eventually stop working</strong>: data moves, interfaces change, and nothing here is kept in step with them. Its purpose is to show a potential use of AI, making a possibility visible quickly so it can be judged and then built properly if it is worth building.</p>',
-    '<p><strong>Not for navigation.</strong> The tide figures are astronomical calculations. They exclude weather, storm surge and local harbour geometry, any of which can shift the real water level substantially.</p>',
+    '<p><strong>Not for navigation.</strong> This app does not predict tide times or water levels. It shows the moon phase and whether tides are near spring or neap, which is astronomy only and leaves out weather, storm surge and local harbour geometry.</p>',
     '<p>For anything on or near the water, use official tide tables from <a href="https://www.kartverket.no/til-sjos/se-havniva" target="_blank" rel="noopener noreferrer">Kartverket</a> or your national hydrographic office.</p>',
     '</div>',
     '</div>',
     '<p class="sb-gate-ack">I understand this is a prototype. Its figures are calculated, not measured, and I will check anything important against an official source.</p>',
     '<div class="sb-gate-actions">',
     '<button type="button" class="sb-gate-btn">Got it</button>',
-    '<a class="sb-gate-link" href="DISCLAIMER.md">Read the full disclaimer</a>',
+    '<a class="sb-gate-link" href="disclaimer.html">Read the full disclaimer</a>',
     '</div>'
   ].join('');
 

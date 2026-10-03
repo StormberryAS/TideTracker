@@ -296,11 +296,22 @@ input[type="date"].text-input {
   background: rgba(0, 0, 0, 0.45);
 }
 
-/* Remove browser default number input spinners */
-.text-input[type="number"]::-webkit-inner-spin-button,
-.text-input[type="number"]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+/* Inline message under a coordinate field when it cannot be read */
+.field-error {
+  color: var(--accent-rose);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.text-input[aria-invalid="true"] {
+  border-color: rgba(255, 107, 107, 0.6);
+}
+
+/* Echo of the coordinates actually used, e.g. "Using 60.39, 5.32" */
+.field-note {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Date input colour fix (browser default is often white) */
@@ -422,33 +433,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .city-missing-note a:hover {
   color: var(--accent-gold);
 }
-/* ── DEVICE PANEL ───────────────────────────────────────────── */
-.device-panel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sp-md);
-  padding: var(--sp-md) 0;
-}
-
-.device-hint {
-  color: var(--text-secondary);
-  font-size: 0.88rem;
-  text-align: center;
-}
-
-.device-coords {
-  font-family: var(--font-mono);
-  font-size: 0.85rem;
-  color: var(--accent-blue);
-  text-align: center;
-  background: rgba(79, 195, 247, 0.08);
-  border: 1px solid rgba(79, 195, 247, 0.2);
-  border-radius: var(--r-sm);
-  padding: var(--sp-sm) var(--sp-md);
-  width: 100%;
-}
-
 /* ── DATE FIELD ─────────────────────────────────────────────── */
 .date-field {
   /* Subtle top separator to visually separate from location panels */
@@ -901,6 +885,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
   .sun-time-icon { font-size: 1.4rem; }
 
+
   .meta-pills { flex-direction: column; }
   .pill { min-width: unset; }
 }
@@ -980,19 +965,103 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   }
 }
 
-.water-bar-track {
-  height: 20px;
-  border-radius: var(--r-sm);
-  background: rgba(0,0,0,0.4);
-  position: relative;
-  overflow: hidden;
+/* ── WHAT THE APP DOES, AND DOES NOT ─────────────────────────── */
+/* Added 2026-10-02 when the invented tide times were removed: the page has
+   to say plainly that it is not a tide table, before anyone acts on it. */
+.app-notice {
+  background: rgba(79, 195, 247, 0.08);
+  border: 1px solid rgba(79, 195, 247, 0.25);
+  border-radius: var(--r-md);
+  padding: var(--sp-md) var(--sp-lg);
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.6;
 }
-.water-bar-fill {
-  background: linear-gradient(90deg, #0d47a1 0%, #2196f3 50%, #4fc3f7 100%);
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  border-radius: var(--r-sm);
-  transition: width 1.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+
+.app-notice strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ── MOON PHASE AND TIDE RANGE RESULTS ──────────────────────── */
+.moon-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.phase-card {
+  background: linear-gradient(160deg, rgba(240,244,255,0.10) 0%, rgba(138,155,202,0.05) 100%);
+  border-color: rgba(240, 244, 255, 0.18);
+}
+
+.range-card {
+  background: linear-gradient(160deg, rgba(79,195,247,0.14) 0%, rgba(33,150,243,0.06) 100%);
+  border-color: rgba(79, 195, 247, 0.25);
+}
+
+.sun-time-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sun-time-sub {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* The moon emoji show the northern-hemisphere view; app.js adds .southern
+   below the equator, where the lit side is the other way round. A separate
+   span, so the mirror does not fight the card icon's bounce animation. */
+.moon-icon {
+  display: inline-block;
+  /* Straight to a colour emoji font: otherwise a text font in the stack can
+     answer first with a flat, black-and-white glyph. */
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+}
+
+.moon-icon.southern {
+  transform: scaleX(-1);
+}
+
+.range-note {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin-bottom: var(--sp-lg);
+}
+
+.next-row {
+  margin-top: var(--sp-sm);
+}
+
+.range-caveat {
+  margin-top: var(--sp-lg);
+  padding-top: var(--sp-md);
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+/* Result labels in the secondary text colour: the muted token measures about
+   2.7:1 here, too faint for the lines that carry the answer. */
+.results-card .pill-label,
+.results-card .sun-time-label,
+.results-card .day-length-label {
+  color: var(--text-secondary);
+}
+
+.results-card .day-length-value {
+  color: var(--text-primary);
+}
+
+/* Small phones: one card per row, icon beside the text. Kept after the rules
+   above so it wins over the two-column grid. */
+@media (max-width: 480px) {
+  .moon-grid { grid-template-columns: 1fr; }
+  .moon-grid .sun-time-card { gap: var(--sp-md); }
+  .moon-grid .sun-time-value { text-align: left; }
+  .app-notice { padding: var(--sp-md); }
 }
 
 /* Visible keyboard focus (WCAG 2.4.7) */

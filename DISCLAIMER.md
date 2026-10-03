@@ -33,7 +33,7 @@ matter with its own written agreement, and this is not it.
 
 ## Specific to TideTracker
 
-**Not for navigation.** Tidal figures are astronomical calculations and exclude meteorological effects, storm surge, local harbour geometry and river flow, any of which can shift real water levels substantially. For navigation, mooring or any activity on or near the water, use official tide tables from [Kartverket](https://www.kartverket.no/til-sjos/se-havniva) or your national hydrographic office.
+**Not for navigation, and not a tide table.** TideTracker does not predict tide times or water levels. It shows the moon's phase, calculated from a published astronomical algorithm, and from that phase alone whether tides are generally near their spring range (the larger tides, around new and full moon) or their neap range (the smaller tides, around the first and last quarter). When high and low water come at a particular place, and how high they reach, depends on local geography, weather, storm surge and river flow, none of which this application models; some coasts barely have a tide at all. For navigation, mooring or any activity on or near the water, use official tide tables from [Kartverket](https://www.kartverket.no/til-sjos/se-havniva) or your national hydrographic office.
 
 ## No warranty
 

@@ -10,9 +10,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <!-- SEO -->
-  <title>TideTracker | Coastal Tides & Currents</title>
+  <title>TideTracker | Moon phase and spring or neap tides</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-  <meta name="description" content="Calculate high and low tide times and lunar influence for any location on Earth. Runs entirely in your browser, fully offline, and handles Polar Night and Midnight Sun edge cases." />
+  <meta name="description" content="See the moon's phase for any date and place, and whether tides are near their spring or neap range. It does not predict tide times. Every calculation runs in your browser." />
 
   <!-- Local Fonts: Inter -->
   <link rel="stylesheet" href="fonts/inter/inter.css?v=868d674e" />
@@ -20,13 +20,13 @@
   <!-- SunCalc library — local copy, no CDN dependency -->
   <script src="suncalc.js?v=e17fa013"></script>
 
-  <link rel="stylesheet" href="style.css?v=370a2371" />
+  <link rel="stylesheet" href="style.css?v=ed9c6211" />
   <link rel="stylesheet" href="gate.css?v=dcb93205" />
-  <script src="gate.js?v=0d0ad992" defer></script>
+  <script src="gate.js?v=3b484d2a" defer></script>
   <link rel="canonical" href="https://tide.stormberry.as/" />
   <link rel="preload" href="fonts/inter/InterVariable.woff2" as="font" type="font/woff2" crossorigin />
-  <meta property="og:title" content="TideTracker | Coastal Tides & Currents" />
-  <meta property="og:description" content="Calculate high and low tide times and lunar influence for any location on Earth. Runs entirely in your browser, fully offline, and handles Polar Night and Midnight Sun edge cases." />
+  <meta property="og:title" content="TideTracker | Moon phase and spring or neap tides" />
+  <meta property="og:description" content="See the moon's phase for any date and place, and whether tides are near their spring or neap range. It does not predict tide times. Every calculation runs in your browser." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://tide.stormberry.as/" />
   <meta property="og:image" content="https://stormberry.as/og-image.jpg" />
@@ -35,8 +35,8 @@
   <meta property="og:site_name" content="Stormberry Labs" />
   <meta property="og:locale" content="en_GB" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="TideTracker | Coastal Tides & Currents" />
-  <meta name="twitter:description" content="Calculate high and low tide times and lunar influence for any location on Earth. Runs entirely in your browser, fully offline, and handles Polar Night and Midnight Sun edge cases." />
+  <meta name="twitter:title" content="TideTracker | Moon phase and spring or neap tides" />
+  <meta name="twitter:description" content="See the moon's phase for any date and place, and whether tides are near their spring or neap range. It does not predict tide times. Every calculation runs in your browser." />
   <meta name="twitter:image" content="https://stormberry.as/og-image.jpg" />
   <script type="application/ld+json">
 {
@@ -44,7 +44,7 @@
   "@type": "WebApplication",
   "name": "TideTracker",
   "url": "https://tide.stormberry.as/",
-  "description": "Calculate high and low tide times and lunar influence for any location on Earth. Runs entirely in your browser, fully offline, and handles Polar Night and Midnight Sun edge cases.",
+  "description": "See the moon's phase for any date and place, and whether tides are near their spring or neap range. It does not predict tide times. Every calculation runs in your browser.",
   "applicationCategory": "UtilitiesApplication",
   "operatingSystem": "Any (modern web browser)",
   "browserRequirements": "Requires JavaScript",
@@ -114,7 +114,7 @@
 
       <div class="header-text">
         <h1>TideTracker</h1>
-        <p class="tagline">HIGH TIDES · LOW TIDES · MOON INFLUENCE<br>anywhere on Earth</p>
+        <p class="tagline">MOON PHASE · SPRING AND NEAP TIDES<br>a prototype, not a tide table</p>
       </div>
     </div>
   </header>
@@ -123,6 +123,15 @@
        MAIN CONTENT
   ============================================================ -->
   <main class="main-container">
+
+    <!-- WHAT THIS DOES, AND DOES NOT -->
+    <p class="app-notice">
+      TideTracker shows the moon's phase for a date and place, and whether tides are near their
+      <strong>spring</strong> range (the larger tides, around new and full moon) or their
+      <strong>neap</strong> range (the smaller tides, around the quarters).
+      <strong>It does not predict tide times or heights.</strong> For those, use local tide tables;
+      in Norway, Kartverket's tide tables.
+    </p>
 
     <!-- ---- INPUT CARD ---- -->
     <section class="card input-card" aria-label="Location and date inputs">
@@ -136,10 +145,6 @@
         <button id="tab-gps"    class="tab" role="tab" aria-selected="false" aria-controls="panel-gps"    data-tab="gps">
           <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-2a6 6 0 110-12 6 6 0 010 12zm0-9a3 3 0 100 6 3 3 0 000-6z"/></svg>
           GPS Coords
-        </button>
-        <button id="tab-device" class="tab" role="tab" aria-selected="false" aria-controls="panel-device" data-tab="device">
-          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M7 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-2V3a1 1 0 00-1-1H7zm0 2h6v1H7V4zM4 8h12v8H4V8zm6 1a1 1 0 110 2 1 1 0 010-2z"/></svg>
-          My Device
         </button>
       </div>
 
@@ -178,31 +183,25 @@
         </div>
       </div>
 
-      <!-- Panel: Manual GPS -->
+      <!-- Panel: Manual GPS
+           Plain text fields, not type="number": a number field lets the browser
+           turn "6,5" into 65 before any script sees it. No inputmode either,
+           because iPhone decimal keypads have no minus key and western and
+           southern coordinates need one. app.js parses with parseDecimal(). -->
       <div id="panel-gps" class="tab-panel" role="tabpanel" aria-labelledby="tab-gps" hidden>
         <div class="field-row">
           <div class="field-group">
             <label for="lat-input">Latitude (−90 to 90)</label>
-            <input type="number" id="lat-input" class="text-input" placeholder="59.9139" min="-90" max="90" step="any" />
+            <input type="text" id="lat-input" class="text-input" placeholder="59.9139" autocomplete="off" spellcheck="false" aria-describedby="lat-error gps-echo" />
+            <p id="lat-error" class="field-error" hidden></p>
           </div>
           <div class="field-group">
             <label for="lon-input">Longitude (−180 to 180)</label>
-            <input type="number" id="lon-input" class="text-input" placeholder="10.7522" min="-180" max="180" step="any" />
+            <input type="text" id="lon-input" class="text-input" placeholder="10.7522" autocomplete="off" spellcheck="false" aria-describedby="lon-error gps-echo" />
+            <p id="lon-error" class="field-error" hidden></p>
           </div>
         </div>
-      </div>
-
-      <!-- Panel: Device Geolocation -->
-      <div id="panel-device" class="tab-panel" role="tabpanel" aria-labelledby="tab-device" hidden>
-        <div class="device-panel">
-          <p class="device-hint">Grant location access so we can read your GPS coordinates.</p>
-          <button id="get-location-btn" class="btn btn-secondary">
-            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/></svg>
-            Get My Location
-          </button>
-          <!-- Shows retrieved GPS coords -->
-          <p id="device-coords" class="device-coords" hidden></p>
-        </div>
+        <p id="gps-echo" class="field-note" aria-live="polite" hidden></p>
       </div>
 
       <!-- DATE SELECTOR — always visible regardless of active tab -->
@@ -214,7 +213,7 @@
       <!-- CALCULATE BUTTON -->
       <button id="calculate-btn" class="btn btn-primary" aria-live="polite">
         <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm1 11H9v-2h2v2zm0-4H9V7h2v2z"/></svg>
-        Calculate Tide Times
+        Show moon phase
       </button>
 
       <!-- Inline error message -->
@@ -222,66 +221,65 @@
 
     </section>
 
-    <!-- ---- RESULTS CARD — hidden until calculation succeeds ---- -->
-    <section id="results-card" class="card results-card" aria-label="Sun times results" hidden>
+    <!-- RESULTS CARD, hidden until calculation succeeds -->
+    <section id="results-card" class="card results-card" aria-label="Moon phase and tide range" hidden>
 
       <!-- Key data pills -->
       <div class="meta-pills">
         <div class="pill">
-          <span class="pill-label">Coordinates</span>
-          <span id="res-coords" class="pill-value mono"></span>
+          <span class="pill-label">Place</span>
+          <span id="res-place" class="pill-value"></span>
         </div>
         <div class="pill">
           <span class="pill-label">Date</span>
           <span id="res-date" class="pill-value"></span>
         </div>
         <div class="pill">
-          <span class="pill-label">Timezone</span>
+          <span class="pill-label">Time zone</span>
           <span id="res-tz" class="pill-value mono"></span>
         </div>
       </div>
 
-      <!-- Tide Cards -->
-      <div class="sun-times-grid">
+      <!-- Moon phase and where the tides stand in the spring and neap cycle -->
+      <div class="sun-times-grid moon-grid">
 
-        <!-- High Tide 1 -->
-        <div class="sun-time-card sunrise-card">
+        <div class="sun-time-card phase-card">
+          <div class="sun-time-icon" aria-hidden="true"><span id="res-moon-icon" class="moon-icon"></span></div>
+          <div class="sun-time-text">
+            <div class="sun-time-label">Moon phase at noon</div>
+            <div id="res-phase" class="sun-time-value"></div>
+            <div id="res-lit" class="sun-time-sub"></div>
+          </div>
+        </div>
+
+        <div class="sun-time-card range-card">
           <div class="sun-time-icon" aria-hidden="true">🌊</div>
-          <div class="sun-time-label">High Tide 1</div>
-          <div id="res-high1" class="sun-time-value mono"></div>
-        </div>
-
-        <!-- High Tide 2 -->
-        <div class="sun-time-card noon-card">
-          <div class="sun-time-icon" aria-hidden="true">🌊</div>
-          <div class="sun-time-label">High Tide 2</div>
-          <div id="res-high2" class="sun-time-value mono"></div>
-        </div>
-
-        <!-- Low Tides -->
-        <div class="sun-time-card sunset-card">
-          <div class="sun-time-icon" aria-hidden="true">📉</div>
-          <div class="sun-time-label">Low Tides</div>
-          <div id="res-lows" class="sun-time-value mono" style="font-size:0.9rem;"></div>
+          <div class="sun-time-text">
+            <div class="sun-time-label">Tide range</div>
+            <div id="res-range" class="sun-time-value"></div>
+          </div>
         </div>
 
       </div>
 
-      <!-- Water Level Bar -->
-      <div class="day-length" style="margin-top: 1rem;">
-        <span class="day-length-label">Water Level:</span>
-        <span id="res-waterlevel-label" class="day-length-value mono"></span>
-        <div class="day-bar-track water-bar-track" aria-hidden="true">
-          <div id="water-bar-fill" class="day-bar-fill water-bar-fill"></div>
-        </div>
+      <p id="res-range-note" class="range-note"></p>
+
+      <!-- The next turning points of the cycle -->
+      <div class="day-length">
+        <span class="day-length-label">Next new or full moon:</span>
+        <span id="res-next-spring" class="day-length-value"></span>
       </div>
-      
-      <!-- Moon Influence -->
-      <div class="day-length" style="margin-top: 1rem;">
-        <span class="day-length-label">Moon Influence:</span>
-        <span id="res-moon-influence" class="day-length-value mono" style="color:var(--text-secondary);"></span>
+      <div class="day-length next-row">
+        <span class="day-length-label">Next quarter moon:</span>
+        <span id="res-next-neap" class="day-length-value"></span>
       </div>
-</section>
+
+      <p class="range-caveat">
+        In many places the largest tides come a day or two after the new or full moon. This is not a
+        tide table: it gives no tide times or heights, and some coasts barely have a tide at all.
+        For times and heights, use local tide tables; in Norway, Kartverket's tide tables.
+      </p>
+    </section>
 
   </main>
 
@@ -497,9 +495,10 @@
       <!-- Powered-by attribution -->
       <div class="footer-powered">
         <p>Powered by
-          <a href="https://github.com/mourner/suncalc" target="_blank" rel="noopener">SunCalc</a>
+          <a href="https://github.com/mourner/suncalc" target="_blank" rel="noopener">SunCalc</a>,
+          the lunar terms in Jean Meeus's <cite>Astronomical Algorithms</cite>,
           and the <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl" target="_blank" rel="noopener">Intl API</a>.
-          Runs entirely in your browser, fully offline.
+          Every calculation runs in your browser.
         </p>
       </div>
 
@@ -530,6 +529,6 @@
   </div>
 
   <script src="cities.js?v=2f08782c"></script>
-  <script src="app.js?v=e642a09e"></script>
+  <script src="app.js?v=5729846d"></script>
 </body>
 </html>

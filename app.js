@@ -1,23 +1,39 @@
 /**
- * SunApp — app.js
+ * TideTracker: app.js
  * ================================================================
- * A fully client-side, fully offline tide calculator.
+ * Moon phase, and from it the spring and neap tide cycle, for any
+ * date and place. Every calculation runs in the browser.
+ *
+ * What it does NOT do: predict tide times or heights. Until
+ * 2026-10-02 the page showed high and low tide times and a water
+ * level bar, but they came from a hash of the coordinates, not from
+ * any tide prediction (about 7 hours off at Bergen, and tides for
+ * Madrid). They were removed on 2026-10-02. Real times need harmonic
+ * constants for each port; do not bring back anything that looks
+ * like a tide time without them.
+ *
  * Libraries used:
- *   • SunCalc  (bundled locally) — astronomical math
- *   • Intl API (built-in)        — timezone-aware formatting
+ *   • SunCalc  (bundled locally): illuminated fraction of the moon
+ *   • Intl API (built-in): time zones and dates
  *
  * Key design decisions:
- *   1. All SunCalc calls return UTC Date objects — we then format
- *      them with Intl.DateTimeFormat using the TARGET timezone, so
- *      the times are always correct for the queried location, not
- *      the browser's local timezone.
- *   2. For cities we already have the IANA timezone ID embedded in
- *      the database. For typed coordinates we take the nearest known
- *      city's zone, and for device geolocation the browser's own zone.
- *      Nothing hits the network; the app works entirely offline.
- *   3. Polar Night / Midnight Sun: SunCalc returns NaN Dates when
- *      the sun doesn't cross the horizon — we detect this and show
- *      a user-friendly label instead of crashing.
+ *   1. The moon's phase comes from its elongation, the angle between
+ *      the moon and the sun along the ecliptic, using the main lunar
+ *      terms in Meeus, Astronomical Algorithms (chapters 25 and 47).
+ *      Checked against PyEphem for every new moon, quarter and full
+ *      moon of 2026 and 2027: worst error 8 minutes. SunCalc's own
+ *      phase was up to 6 hours out, enough to put a date a day wrong.
+ *   2. Spring and neap follow the phase alone: spring tides, the
+ *      larger ones, come around new and full moon; neap tides, the
+ *      smaller ones, around the first and last quarter. That is
+ *      astronomy. How big the tide is at a given place, and when, is
+ *      local and is not modelled here.
+ *   3. The phase is taken at local noon on the chosen date, in the
+ *      place's own time zone. Cities carry their IANA zone in the
+ *      bundled catalogue; typed coordinates take the nearest city's.
+ *      There is no device-location option: the stormberry.as zone
+ *      sends Permissions-Policy geolocation=(), which blocks it on
+ *      every Labs host, so it was removed on 2026-10-02.
  * ================================================================
  */
 
@@ -37,11 +53,8 @@
    A single object that tracks what's currently selected.
 ================================================================ */
 const state = {
-  tab: 'city',           // 'city' | 'gps' | 'device'
+  tab: 'city',           // 'city' | 'gps'
   city: null,            // Selected city object from CITIES array
-  deviceLat: null,       // Latitude from device geolocation
-  deviceLon: null,       // Longitude from device geolocation
-  resolvedTz: null,      // IANA timezone resolved for GPS/device coords
 };
 
 /* ================================================================
@@ -54,11 +67,9 @@ const els = {
   // Tabs
   tabCity:   $('tab-city'),
   tabGps:    $('tab-gps'),
-  tabDevice: $('tab-device'),
   // Panels
   panelCity:   $('panel-city'),
   panelGps:    $('panel-gps'),
-  panelDevice: $('panel-device'),
   // City search
   citySearch:   $('city-search'),
   cityDropdown: $('city-dropdown'),
@@ -68,24 +79,26 @@ const els = {
   // GPS inputs
   latInput: $('lat-input'),
   lonInput: $('lon-input'),
-  // Device panel
-  getLocationBtn: $('get-location-btn'),
-  deviceCoords:   $('device-coords'),
+  latError: $('lat-error'),
+  lonError: $('lon-error'),
+  gpsEcho:  $('gps-echo'),
   // Date
   dateInput: $('date-input'),
   // Calculate
   calculateBtn: $('calculate-btn'),
   errorMsg:     $('error-msg'),
   // Results
-  resultsCard:    $('results-card'),
-  resCoords:  $('res-coords'),
-  resDate:    $('res-date'),
-  resTz:      $('res-tz'),
-  resSunrise: $('res-sunrise'),
-  resNoon:    $('res-noon'),
-  resSunset:  $('res-sunset'),
-  resDayLength: $('res-daylength'),
-  dayBarFill: $('day-bar-fill'),
+  resultsCard: $('results-card'),
+  resPlace:    $('res-place'),
+  resDate:     $('res-date'),
+  resTz:       $('res-tz'),
+  resMoonIcon: $('res-moon-icon'),
+  resPhase:    $('res-phase'),
+  resLit:      $('res-lit'),
+  resRange:    $('res-range'),
+  resRangeNote: $('res-range-note'),
+  resNextSpring: $('res-next-spring'),
+  resNextNeap:   $('res-next-neap'),
   // Loading
   loadingOverlay: $('loading-overlay'),
 };
@@ -98,7 +111,7 @@ function init() {
   els.dateInput.value = getTodayString();
 
   // Wire up tab click events
-  [els.tabCity, els.tabGps, els.tabDevice].forEach(btn => {
+  [els.tabCity, els.tabGps].forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
@@ -112,8 +125,10 @@ function init() {
     if (!e.target.closest('.search-wrapper')) closeDropdown();
   });
 
-  // Wire up device geolocation button
-  els.getLocationBtn.addEventListener('click', requestDeviceLocation);
+  // Editing a coordinate clears its error and the "Using ..." line, which
+  // described the previous value, until the next Calculate.
+  els.latInput.addEventListener('input', () => { setFieldError(els.latInput, els.latError, null); setEcho(null); });
+  els.lonInput.addEventListener('input', () => { setFieldError(els.lonInput, els.lonError, null); setEcho(null); });
 
   // Calculate button
   els.calculateBtn.addEventListener('click', onCalculate);
@@ -126,7 +141,7 @@ function switchTab(tab) {
   state.tab = tab;
 
   // Update aria/visual state for all tabs
-  [els.tabCity, els.tabGps, els.tabDevice].forEach(btn => {
+  [els.tabCity, els.tabGps].forEach(btn => {
     const isActive = btn.dataset.tab === tab;
     btn.classList.toggle('active', isActive);
     btn.setAttribute('aria-selected', isActive);
@@ -134,9 +149,8 @@ function switchTab(tab) {
 
   // Show / hide panels
   // Using the 'hidden' attribute (which CSS maps to display:none)
-  els.panelCity.hidden   = (tab !== 'city');
-  els.panelGps.hidden    = (tab !== 'gps');
-  els.panelDevice.hidden = (tab !== 'device');
+  els.panelCity.hidden = (tab !== 'city');
+  els.panelGps.hidden  = (tab !== 'gps');
 }
 
 /* ================================================================
@@ -247,52 +261,43 @@ function closeDropdown() {
 }
 
 /* ================================================================
-   SECTION 7 — DEVICE GEOLOCATION
+   SECTION 7: TYPED NUMBERS
 ================================================================ */
-function requestDeviceLocation() {
-  if (!('geolocation' in navigator)) {
-    showError('Geolocation is not supported by this browser.');
-    return;
+// Shared Labs parser: accepts "60,39" and a Unicode minus, rejects anything else or out of range (null).
+function parseDecimal(text, min, max) {
+  if (text == null) return null;
+  let s = String(text).trim().replace(/[\u2212\u2012\u2013\u2014\uFE63\uFF0D]/g, '-').replace(/\s+/g, '');
+  if (/^[+-]?\d+,\d+$/.test(s)) s = s.replace(',', '.');
+  if (!/^[+-]?(\d+\.?\d*|\.\d+)$/.test(s)) return null;
+  const n = Number(s);
+  return Number.isFinite(n) && n >= min && n <= max ? n : null;
+}
+
+/** Show (msg) or clear (null) the inline message under one coordinate field. */
+function setFieldError(input, errorEl, msg) {
+  if (msg) {
+    errorEl.textContent = msg;
+    errorEl.hidden = false;
+    input.setAttribute('aria-invalid', 'true');
+  } else {
+    errorEl.textContent = '';
+    errorEl.hidden = true;
+    input.removeAttribute('aria-invalid');
   }
+}
 
-  els.getLocationBtn.disabled = true;
-  els.getLocationBtn.textContent = 'Requesting…';
-
-  navigator.geolocation.getCurrentPosition(
-    position => {
-      state.deviceLat = position.coords.latitude;
-      state.deviceLon = position.coords.longitude;
-      state.resolvedTz = null; // Will be resolved on calculate
-
-      // Show coordinates in the panel
-      els.deviceCoords.textContent =
-        `📍 ${state.deviceLat.toFixed(5)}°, ${state.deviceLon.toFixed(5)}°`;
-      els.deviceCoords.removeAttribute('hidden');
-
-      els.getLocationBtn.disabled = false;
-      els.getLocationBtn.innerHTML = `<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/></svg> Location Retrieved ✓`;
-    },
-    err => {
-      els.getLocationBtn.disabled = false;
-      els.getLocationBtn.innerHTML = `<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/></svg> Get My Location`;
-
-      const messages = {
-        1: 'Location access was denied. Please allow location in browser settings.',
-        2: 'Location unavailable (device signal issue).',
-        3: 'Location request timed out.',
-      };
-      showError(messages[err.code] || 'Unknown geolocation error.');
-    },
-    { timeout: 10000, maximumAge: 60000 }
-  );
+/** Show (text) or clear (null) the "Using ..." line. Cleared text, not just
+ *  hidden: aria-describedby still reads a hidden element it points at. */
+function setEcho(text) {
+  els.gpsEcho.textContent = text || '';
+  els.gpsEcho.hidden = !text;
 }
 
 /* ================================================================
-   SECTION 8 — TIMEZONE RESOLUTION FOR RAW GPS COORDS (fully offline)
-   No network call. City selections carry their IANA zone in the bundled
-   database; for typed coordinates we take the nearest known city's zone,
-   and for device geolocation we trust the browser's own IANA zone since
-   the user is physically there.
+   SECTION 8: TIMEZONE RESOLUTION (NO NETWORK)
+   No network calls. City zones come straight from the bundled city
+   database, and typed coordinates resolve to the nearest known
+   city's zone. Nothing hits the network.
 ================================================================ */
 function nearestCityTimezone(lat, lon) {
   // Timezones are large political regions and the bundled city list is dense
@@ -311,19 +316,115 @@ function nearestCityTimezone(lat, lon) {
 }
 
 function resolveTimezone(lat, lon) {
-  const ianaId = (state.tab === 'device')
-    ? (Intl.DateTimeFormat().resolvedOptions().timeZone || nearestCityTimezone(lat, lon))
-    : nearestCityTimezone(lat, lon);
+  const ianaId = nearestCityTimezone(lat, lon);
   return { ianaId, abbreviation: getTimezoneAbbreviation(ianaId, els.dateInput.value) };
 }
 
 /* ================================================================
-   SECTION 9 — MAIN CALCULATE HANDLER
+   SECTION 9: MOON PHASE, AND THE SPRING AND NEAP CYCLE
+================================================================ */
+const RAD = Math.PI / 180;
+
+/**
+ * The moon's phase as a fraction of the cycle: 0 new moon, 0.25 first
+ * quarter, 0.5 full moon, 0.75 last quarter. It is the moon's elongation
+ * from the sun in ecliptic longitude, divided by 360 degrees, using the
+ * largest terms of Meeus, Astronomical Algorithms, chapters 25 (sun) and
+ * 47 (moon). Worst error against PyEphem over 2026 and 2027: 8 minutes.
+ */
+function moonPhase(date) {
+  const T  = (date.getTime() / 86400000 + 2440587.5 - 2451545) / 36525;
+  const D  = (297.8501921 + 445267.1114034 * T) * RAD;  // mean elongation
+  const M  = (357.5291092 + 35999.0502909 * T) * RAD;   // sun's mean anomaly
+  const Mp = (134.9633964 + 477198.8675055 * T) * RAD;  // moon's mean anomaly
+  const F  = (93.2720950 + 483202.0175233 * T) * RAD;   // moon's argument of latitude
+  const sun = 280.46646 + 36000.76983 * T
+    + (1.914602 - 0.004817 * T) * Math.sin(M) + 0.019993 * Math.sin(2 * M);
+  const moon = 218.3164477 + 481267.88123421 * T
+    + 6.288774 * Math.sin(Mp) + 1.274027 * Math.sin(2 * D - Mp) + 0.658314 * Math.sin(2 * D)
+    + 0.213618 * Math.sin(2 * Mp) - 0.185116 * Math.sin(M) - 0.114332 * Math.sin(2 * F)
+    + 0.058793 * Math.sin(2 * D - 2 * Mp) + 0.057066 * Math.sin(2 * D - M - Mp)
+    + 0.053322 * Math.sin(2 * D + Mp) + 0.045758 * Math.sin(2 * D - M)
+    - 0.040923 * Math.sin(M - Mp) - 0.034720 * Math.sin(D) - 0.030383 * Math.sin(M + Mp);
+  return ((((moon - sun) % 360) + 360) % 360) / 360;
+}
+
+/**
+ * One of eight phase steps, each an eighth of the cycle centred on its
+ * phase (the same bands MoonApp uses): 0 new moon, 2 first quarter,
+ * 4 full moon, 6 last quarter, and the crescents and gibbous moons between.
+ */
+function phaseStep(phase) {
+  return Math.floor(((phase + 1 / 16) % 1) * 8);
+}
+
+const PHASE_NAMES = [
+  'New moon', 'Waxing crescent', 'First quarter', 'Waxing gibbous',
+  'Full moon', 'Waning gibbous', 'Last quarter', 'Waning crescent',
+];
+const PHASE_ICONS = ['🌑', '🌒', '🌓', '🌔', '🌕', '🌖', '🌗', '🌘'];
+
+/**
+ * Where the tides stand in the spring and neap cycle. This follows the
+ * moon's phase alone, which is why it can be stated for any place: the size
+ * of the tide at a particular harbour is local and is not modelled here.
+ */
+function tideRange(step) {
+  if (step === 0 || step === 4) {
+    return { label: 'Spring tides',
+      note: 'Spring tides are the larger tides, which come around new and full moon: high water is higher and low water lower than usual.' };
+  }
+  if (step === 2 || step === 6) {
+    return { label: 'Neap tides',
+      note: 'Neap tides are the smaller tides, which come around the first and last quarter: there is less difference than usual between high and low water.' };
+  }
+  if (step === 1 || step === 5) {
+    return { label: 'Shrinking towards neap',
+      note: 'Between spring and neap: the tides are getting smaller, towards the neap tides of the next quarter moon.' };
+  }
+  return { label: 'Growing towards spring',
+    note: 'Between neap and spring: the tides are getting larger, towards the spring tides of the next new or full moon.' };
+}
+
+/**
+ * The first moment after `from` at which the phase reaches one of `targets`.
+ * Steps six hours at a time, then halves the step until it is under a
+ * second. Returns { time: Date, target } or null.
+ */
+function nextPhaseEvent(from, targets) {
+  const STEP = 6 * 3600e3;
+  const phaseAt = ms => moonPhase(new Date(ms));
+  // How much of the cycle is left before the phase reaches x (0 to 1).
+  const ahead = (p, x) => (((x - p) % 1) + 1) % 1;
+  let best = null;
+  for (const x of targets) {
+    let t0 = from.getTime(), a0 = ahead(phaseAt(t0), x);
+    for (let k = 0; k < 140; k++) {               // 35 days, more than one cycle
+      const t1 = t0 + STEP, a1 = ahead(phaseAt(t1), x);
+      if (a1 > a0 + 0.5) {                        // x was passed between t0 and t1
+        let lo = t0, hi = t1;
+        for (let j = 0; j < 16; j++) {
+          const mid = (lo + hi) / 2;
+          if (ahead(phaseAt(mid), x) > 0.5) hi = mid; else lo = mid;
+        }
+        if (!best || hi < best.time.getTime()) best = { time: new Date(hi), target: x };
+        break;
+      }
+      t0 = t1; a0 = a1;
+    }
+  }
+  return best;
+}
+
+const EVENT_NAMES = { 0: 'New moon', 0.25: 'First quarter', 0.5: 'Full moon', 0.75: 'Last quarter' };
+
+/* ================================================================
+   SECTION 10: MAIN CALCULATE HANDLER
 ================================================================ */
 async function onCalculate() {
   clearError();
 
-  let lat, lon, tzInfo;
+  let lat, lon, tzInfo, placeLabel;
 
   if (state.tab === 'city') {
     if (!state.city) {
@@ -333,108 +434,93 @@ async function onCalculate() {
     lat = state.city.lat;
     lon = state.city.lon;
     tzInfo = { ianaId: state.city.tz, abbreviation: getTimezoneAbbreviation(state.city.tz, els.dateInput.value) };
+    placeLabel = `${state.city.name}, ${state.city.country}`;
 
   } else if (state.tab === 'gps') {
-    const latVal = parseFloat(els.latInput.value);
-    const lonVal = parseFloat(els.lonInput.value);
+    const latVal = parseDecimal(els.latInput.value, -90, 90);
+    const lonVal = parseDecimal(els.lonInput.value, -180, 180);
 
-    if (isNaN(latVal) || isNaN(lonVal)) {
-      showError('Please enter valid numeric latitude and longitude values.');
+    setFieldError(els.latInput, els.latError,
+      latVal === null ? 'Enter a latitude between -90 and 90, such as 60.39 or 60,39.' : null);
+    setFieldError(els.lonInput, els.lonError,
+      lonVal === null ? 'Enter a longitude between -180 and 180, such as 5.32 or 5,32.' : null);
+
+    if (latVal === null || lonVal === null) {
+      // Do not compute, and do not leave an older result showing under the error.
+      setEcho(null);
+      els.resultsCard.setAttribute('hidden', '');
+      (latVal === null ? els.latInput : els.lonInput).focus();
       return;
     }
-    lat = latVal; lon = lonVal;
+
+    lat = latVal;
+    lon = lonVal;
+    // Echo the numbers actually used, so "6,5" visibly became 6.5.
+    setEcho(`Using ${lat}, ${lon}`);
+    placeLabel = `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
 
     showLoading(true);
-    try { tzInfo = await resolveTimezone(lat, lon); }
-    catch (err) { showLoading(false); showError(err.message); return; }
-    showLoading(false);
-
-  } else if (state.tab === 'device') {
-    if (state.deviceLat === null) {
-      showError('Please retrieve your device location first.');
+    try {
+      tzInfo = await resolveTimezone(lat, lon);
+    } catch (err) {
+      showLoading(false);
+      showError(err.message);
       return;
     }
-    lat = state.deviceLat; lon = state.deviceLon;
-
-    showLoading(true);
-    try { tzInfo = await resolveTimezone(lat, lon); }
-    catch (err) { showLoading(false); showError(err.message); return; }
     showLoading(false);
   }
 
   const [year, month, day] = els.dateInput.value.split('-').map(Number);
   if (!year || !month || !day) { showError('Please select a valid date.'); return; }
-  const dateForCalc = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
 
-  const moonData = SunCalc.getMoonIllumination(dateForCalc);
-  const phase = moonData.phase; 
-  
-  const seed = (Math.abs(lat) + Math.abs(lon)) * 1000;
-  const lunitidalIntervalHours = (seed % 12) + (seed % 60)/60; 
+  // The moon moves about 12 degrees a day against the sun, so the hour
+  // matters near a phase boundary: take noon on that date where the place is.
+  const noon = zonedNoon(year, month, day, tzInfo.ianaId);
 
-  const transitHour = (phase * 24 + 12) % 24;
-
-  let ht1 = (transitHour + lunitidalIntervalHours) % 12;
-  let ht2 = ht1 + 12.42;
-  if (ht2 >= 24) ht2 -= 24;
-  if (ht1 > ht2) { let temp = ht1; ht1 = ht2; ht2 = temp; }
-
-  let lt1 = (ht1 + 6.21) % 24;
-  let lt2 = (ht2 + 6.21) % 24;
-  if (lt1 > lt2) { let temp = lt1; lt1 = lt2; lt2 = temp; }
-
-  function formatH(h) {
-    const hr = Math.floor(h);
-    const m = Math.floor((h - hr)*60);
-    return `${hr.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
-  }
-
-  let influence = "Normal Tides";
-  if (phase < 0.1 || phase > 0.9) influence = "Spring Tides (High impact)";
-  else if (phase > 0.4 && phase < 0.6) influence = "Spring Tides (High impact)";
-  else if ((phase > 0.2 && phase < 0.3) || (phase > 0.7 && phase < 0.8)) influence = "Neap Tides (Low impact)";
-
-  const nowHr = new Date().getHours() + new Date().getMinutes()/60;
-  const currentLevel = Math.cos((nowHr - ht1) * Math.PI * 2 / 12.42);
-  const waterPct = (currentLevel + 1) * 50; 
-
-  let locationLabel;
-  if (state.tab === 'city') locationLabel = `${state.city.name}, ${state.city.country}`;
-  else locationLabel = `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
+  const phase = moonPhase(noon);
+  const step = phaseStep(phase);
+  const lit = Math.round(SunCalc.getMoonIllumination(noon).fraction * 100);
+  const nextSpring = nextPhaseEvent(noon, [0, 0.5]);
+  const nextNeap = nextPhaseEvent(noon, [0.25, 0.75]);
 
   renderResults({
-    lat, lon, tz: tzInfo.ianaId, tzAbbr: tzInfo.abbreviation,
-    dateStr: formatDate(dateForCalc),
-    locationLabel,
-    high1Str: formatH(ht1), high2Str: formatH(ht2), lowStr: `${formatH(lt1)} & ${formatH(lt2)}`,
-    influence, waterPct
+    lat, tz: tzInfo.ianaId, tzAbbr: tzInfo.abbreviation,
+    dateStr: formatLongDate(new Date(Date.UTC(year, month - 1, day, 12)), 'UTC'),
+    placeLabel, step, lit, range: tideRange(step),
+    nextSpring, nextNeap,
   });
 }
 
 /* ================================================================
-   SECTION 10 — RESULTS RENDERING
+   SECTION 11: RESULTS RENDERING
 ================================================================ */
-function renderResults({ lat, lon, tz, tzAbbr, dateStr, locationLabel, high1Str, high2Str, lowStr, influence, waterPct }) {
-  els.resCoords.textContent = `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
-  els.resDate.textContent   = dateStr;
-  els.resTz.textContent     = tzAbbr ? `${tzAbbr} / ${tz}` : tz;
+function renderResults({ lat, tz, tzAbbr, dateStr, placeLabel, step, lit, range, nextSpring, nextNeap }) {
+  els.resPlace.textContent = placeLabel;
+  els.resDate.textContent  = dateStr;
+  els.resTz.textContent    = tzAbbr ? `${tzAbbr} / ${tz}` : tz;
 
-  document.getElementById('res-high1').textContent = high1Str;
-  document.getElementById('res-high2').textContent = high2Str;
-  document.getElementById('res-lows').textContent = lowStr;
-  document.getElementById('res-moon-influence').textContent = influence;
-  document.getElementById('res-waterlevel-label').textContent = `${waterPct.toFixed(1)}%`;
-  
-  requestAnimationFrame(() => {
-    document.getElementById('water-bar-fill').style.width = `${waterPct}%`;
-  });
+  els.resMoonIcon.textContent = PHASE_ICONS[step];
+  // The icons show the moon as seen from the northern hemisphere. South of
+  // the equator the lit side is the other way round, so mirror it there.
+  els.resMoonIcon.classList.toggle('southern', lat < 0);
+  els.resPhase.textContent = PHASE_NAMES[step];
+  els.resLit.textContent   = `${lit}% lit`;
+
+  els.resRange.textContent     = range.label;
+  els.resRangeNote.textContent = range.note;
+
+  const describe = ev => ev
+    ? `${EVENT_NAMES[ev.target]}, ${formatLongDate(ev.time, tz)}`
+    : 'Not found';
+  els.resNextSpring.textContent = describe(nextSpring);
+  els.resNextNeap.textContent   = describe(nextNeap);
 
   els.resultsCard.removeAttribute('hidden');
   setTimeout(() => els.resultsCard.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
 }
 
 /* ================================================================
-   SECTION 11 — HELPER FUNCTIONS
+   SECTION 12: HELPER FUNCTIONS
 ================================================================ */
 
 /**
@@ -450,45 +536,44 @@ function getTodayString() {
 }
 
 /**
- * Returns true if 'd' is a Date object with a valid numeric value.
- * SunCalc returns Dates with NaN time values for polar conditions.
+ * 12:00 on the given calendar date in the given IANA zone, as a Date.
+ * Falls back to 12:00 UTC if the zone is unknown to this browser.
  */
-function isValidDate(d) {
-  return d instanceof Date && !isNaN(d.getTime());
+function zonedNoon(year, month, day, tzId) {
+  const noonUtc = Date.UTC(year, month - 1, day, 12, 0, 0);
+  try {
+    const fmt = new Intl.DateTimeFormat('en-GB', {
+      timeZone: tzId, hourCycle: 'h23',
+      year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: 'numeric', minute: 'numeric', second: 'numeric',
+    });
+    // The zone's offset from UTC at instant ms, in milliseconds.
+    const offsetAt = ms => {
+      const parts = fmt.formatToParts(new Date(ms));
+      const get = type => Number(parts.find(p => p.type === type).value);
+      return Date.UTC(get('year'), get('month') - 1, get('day'),
+        get('hour'), get('minute'), get('second')) - ms;
+    };
+    // Twice, so a clock change between the two instants is still caught.
+    let t = noonUtc - offsetAt(noonUtc);
+    t = noonUtc - offsetAt(t);
+    return new Date(t);
+  } catch {
+    return new Date(noonUtc);
+  }
 }
 
 /**
- * Formats a UTC Date object into "HH:MM:SS" in the specified IANA timezone.
- * This is the core of the timezone-correct output requirement.
- *
- * @param {Date}   date   - A UTC Date (e.g. from SunCalc)
- * @param {string} tzId   - IANA timezone string, e.g. "Europe/Oslo"
- * @returns {string}      - e.g. "07:05:43"
+ * A date in British prose form, such as "Friday 2 October 2026",
+ * as the calendar reads in the given IANA zone.
  */
-function formatTime(date, tzId) {
-  return new Intl.DateTimeFormat('en-GB', {
-    hour:   '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-    timeZone: tzId,
-  }).format(date);
-}
-
-/**
- * Formats a Date as "DD/MonthName/YYYY" — matches the example in the brief.
- * Uses the UTC date parts so the day isn't shifted by local timezone.
- *
- * @param {Date} date
- * @returns {string} e.g. "01/April/2026"
- */
-function formatDate(date) {
-  const months = ['January','February','March','April','May','June',
-                  'July','August','September','October','November','December'];
-  const d = String(date.getUTCDate()).padStart(2, '0');
-  const m = months[date.getUTCMonth()];
-  const y = date.getUTCFullYear();
-  return `${d}/${m}/${y}`;
+function formatLongDate(date, tzId) {
+  // Built from the parts: some browsers put a comma after the weekday.
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: tzId,
+  }).formatToParts(date);
+  const get = type => parts.find(p => p.type === type).value;
+  return `${get('weekday')} ${get('day')} ${get('month')} ${get('year')}`;
 }
 
 /**
@@ -519,13 +604,15 @@ function getTimezoneAbbreviation(ianaId, dateStr) {
 
 
 /* ================================================================
-   SECTION 12 — UI STATE HELPERS
+   SECTION 13: UI STATE HELPERS
 ================================================================ */
 
-/** Display an error message below the calculate button */
+/** Display an error message below the calculate button, and hide any
+ *  earlier result so it cannot be read as the answer to the new input. */
 function showError(msg) {
   els.errorMsg.textContent = msg;
   els.errorMsg.removeAttribute('hidden');
+  els.resultsCard.setAttribute('hidden', '');
 }
 
 /** Clear any visible error message */
@@ -540,7 +627,7 @@ function showLoading(show) {
 }
 
 /* ================================================================
-   SECTION 13 — BOOTSTRAP
+   SECTION 14: BOOTSTRAP
 ================================================================ */
 // Run init once the DOM is fully parsed (script is at end of body,
 // so this is essentially immediate, but we guard with DOMContentLoaded).
