@@ -19,7 +19,10 @@ A privacy-first prototype that shows the moon's phase for any date and place, an
 - Until 2 October 2026 the page also showed high and low tide times and a water-level bar. They were not tide predictions (they were derived from the coordinates alone), so they were removed. Real tide times need harmonic constants for each port.
 
 ## Architecture
-- **Vanilla HTML/CSS/JS**, no frameworks, no build step.
+- **Vanilla HTML and CSS, TypeScript**, no frameworks.
+- **TypeScript source in `ts/`, compiled JavaScript committed.** `ts/app.ts` compiles to `app.js`, at the same path the page has always loaded, as a classic script (no modules). The compiled file is committed because GitHub Pages serves the repository as it is, with no build step of its own; `.gitattributes` marks it as generated. Edit the TypeScript, never the `.js`.
+- **Generated and vendored files kept as they are.** `cities.js` is the shared Stormberry Labs city catalogue, written by SunApp's `update_cities.py`; `ts/cities.d.ts` types it for the TypeScript. `gate.js` and `gate.css`, the first-run notice, are written by the shared `build-gates.py`. `suncalc.js` is SunCalc 1.8.0, vendored byte for byte; `ts/suncalc.d.ts` declares its types. None of them is edited here.
+- **Build:** `npm run build` (`tools/build-ts.sh`) installs the pinned compiler (`npm ci`), compiles, then runs `bump_assets.py` to restamp the `?v=` cache stamps. `npm run check` changes nothing and fails when the committed JavaScript is not what the TypeScript compiles to. `npm test` runs the tests in `tests/` with the test runner built into Node 24. The published app has no runtime dependencies.
 - Stormberry dark-mode glassmorphism design system.
 
 ## Disclaimer
