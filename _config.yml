@@ -21,9 +21,16 @@
 # the build script and the tests (tools/, tests/), the package files and .npmrc, and node_modules/,
 # where npm ci puts TypeScript, are excluded. (.npmrc and .gitattributes are dot files, which Jekyll
 # never publishes; .npmrc is listed anyway, as in AstroQuiz and the others.)
+#
+# 6 November 2026: DISCLAIMER.md, the Markdown source of disclaimer.html, and description.txt, an
+# old planning note, are excluded too. No served file links or loads either of them: the gate and
+# the footer link disclaimer.html. A stale helper script, update_tides.py, was deleted in the same
+# change. Its exclude line stays: Jekyll's exclude list replaces its defaults, so no line goes.
 exclude:
   - LICENSE
   - README.md
+  - DISCLAIMER.md
+  - description.txt
   - bump_assets.py
   - update_tides.py
   - tools/
