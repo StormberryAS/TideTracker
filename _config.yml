@@ -26,6 +26,12 @@
 # old planning note, are excluded too. No served file links or loads either of them: the gate and
 # the footer link disclaimer.html. A stale helper script, update_tides.py, was deleted in the same
 # change. Its exclude line stays: Jekyll's exclude list replaces its defaults, so no line goes.
+#
+# 6 November 2026 (labs round D): "theme: null" stops GitHub Pages from applying its default theme
+# (Primer). Without it Pages published the theme's own stylesheet as /assets/css/style.css, a file
+# no page of this site links. A test build with the same image as GitHub Pages shows that this file
+# is the only one that goes; every other file keeps its bytes. No exclude line was removed.
+theme: null
 exclude:
   - LICENSE
   - README.md
